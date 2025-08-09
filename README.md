@@ -16,6 +16,7 @@ A lightweight dependency injection framework for Go, inspired by Spring's IoC/DI
 - 🛠️ **Multiple Scopes** - Support for singleton and prototype patterns
 - 🧵 **Thread-Safe** - Concurrent-safe container implementation
 - 🔧 **Type-Safe** - Safety guarantees based on Go's strong type system
+- 📝 **Event Logging** - Comprehensive framework event recording and monitoring
 
 ### 📁 Project Structure
 
@@ -25,10 +26,12 @@ gospring/
 ├── context/           # Application context
 ├── scanner/           # Component scanner
 ├── lifecycle/         # Lifecycle management
+├── logging/           # Logging system
 ├── annotations/       # Annotation and tag processing
 ├── examples/          # Example code
 │   ├── basic/        # Basic usage examples
-│   └── web/          # Web application examples
+│   ├── web/          # Web application examples
+│   └── logging/      # Logging system examples
 ├── tests/            # Unit tests
 ├── docs/             # Documentation
 └── README.md
@@ -99,6 +102,9 @@ Automatically discovers and registers components with specific tags.
 #### 4. Lifecycle Management
 Supports component initialization and destruction callbacks.
 
+#### 5. Logging System
+Provides event-driven logging with multiple logger implementations and flexible configuration.
+
 ### 🏷️ Tag Reference
 
 | Tag | Description | Example |
@@ -124,6 +130,11 @@ go run examples/web/main.go
 ```
 Then visit http://localhost:8080
 
+#### Logging System Example
+```bash
+go run examples/logging/main.go
+```
+
 #### Run Tests
 ```bash
 go test ./tests/ -v
@@ -133,6 +144,7 @@ go test ./tests/ -v
 
 - [Architecture Design](docs/architecture.md) - Detailed architecture design and implementation principles
 - [Usage Guide](docs/usage.md) - Complete usage guide and best practices
+- [Logging System](docs/logging.md) - Logging system usage guide and configuration
 - [Performance Report](docs/performance.md) - Performance test results and optimization recommendations
 
 ### 🤝 Contributing
@@ -159,6 +171,7 @@ MIT License
 - 🛠️ **多种作用域** - 支持单例和原型模式
 - 🧵 **线程安全** - 并发安全的容器实现
 - 🔧 **类型安全** - 基于Go强类型系统的安全保证
+- 📝 **事件日志** - 完整的框架运行事件记录和监控
 
 ## 📁 项目结构
 
@@ -168,10 +181,12 @@ gospring/
 ├── context/           # 应用上下文
 ├── scanner/           # 组件扫描器
 ├── lifecycle/         # 生命周期管理
+├── logging/           # 日志系统
 ├── annotations/       # 注解和标签处理
 ├── examples/          # 示例代码
 │   ├── basic/        # 基础使用示例
-│   └── web/          # Web应用示例
+│   ├── web/          # Web应用示例
+│   └── logging/      # 日志系统示例
 ├── tests/            # 单元测试
 ├── docs/             # 文档
 └── README.md
@@ -242,6 +257,9 @@ func main() {
 ### 4. 生命周期管理
 支持组件的初始化和销毁回调。
 
+### 5. 日志系统
+提供事件驱动的日志记录，支持多种日志器实现和灵活的日志配置。
+
 ## 🏷️ 标签说明
 
 | 标签 | 说明 | 示例 |
@@ -267,6 +285,11 @@ go run examples/web/main.go
 ```
 然后访问 http://localhost:8080
 
+### 日志系统示例
+```bash
+go run examples/logging/main.go
+```
+
 ### 运行测试
 ```bash
 go test ./tests/ -v
@@ -276,6 +299,7 @@ go test ./tests/ -v
 
 - [架构设计](docs/architecture.md) - 详细的架构设计和实现原理
 - [使用指南](docs/usage.md) - 完整的使用指南和最佳实践
+- [日志系统](docs/logging.md) - 日志系统的使用指南和配置说明
 - [性能报告](docs/performance.md) - 性能测试结果和优化建议
 
 ## 🤝 贡献

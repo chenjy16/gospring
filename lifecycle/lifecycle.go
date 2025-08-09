@@ -3,25 +3,57 @@ package lifecycle
 import (
 	"fmt"
 	"reflect"
+	"time"
 	"gospring/annotations"
+	"gospring/logging"
 )
 
 // LifecycleManager 生命周期管理器
 type LifecycleManager struct {
 	initOrder    []string
 	destroyOrder []string
+	logger       logging.Logger
 }
 
 // NewLifecycleManager 创建生命周期管理器
 func NewLifecycleManager() *LifecycleManager {
+	return NewLifecycleManagerWithLogger(logging.NewConsoleLogger())
+}
+
+// NewLifecycleManagerWithLogger 创建带有指定日志器的生命周期管理器
+func NewLifecycleManagerWithLogger(logger logging.Logger) *LifecycleManager {
 	return &LifecycleManager{
 		initOrder:    make([]string, 0),
 		destroyOrder: make([]string, 0),
+		logger:       logger,
 	}
+}
+
+// SetLogger 设置日志器
+func (lm *LifecycleManager) SetLogger(logger logging.Logger) {
+	lm.logger = logger
+}
+
+// GetLogger 获取日志器
+func (lm *LifecycleManager) GetLogger() logging.Logger {
+	return lm.logger
 }
 
 // ProcessInitialization 处理Bean初始化
 func (lm *LifecycleManager) ProcessInitialization(beanName string, instance interface{}) error {
+	start := time.Now()
+	componentType := reflect.TypeOf(instance).String()
+	
+	// 记录生命周期开始事件
+	lm.logger.LogEvent(&logging.LifecycleStarting{
+		Timestamp:     time.Now(),
+		ComponentID:   beanName,
+		ComponentType: componentType,
+		MethodName:    "Init",
+	})
+
+	var initError error
+
 	// 1. 检查是否实现了BeanNameAware接口
 	if aware, ok := instance.(annotations.BeanNameAware); ok {
 		aware.SetBeanName(beanName)
@@ -30,20 +62,36 @@ func (lm *LifecycleManager) ProcessInitialization(beanName string, instance inte
 	// 2. 检查是否实现了Initializer接口
 	if initializer, ok := instance.(annotations.Initializer); ok {
 		if err := initializer.Init(); err != nil {
-			return fmt.Errorf("failed to initialize bean '%s': %v", beanName, err)
+			initError = fmt.Errorf("failed to initialize bean '%s': %v", beanName, err)
 		}
 	}
 
 	// 3. 检查是否实现了PostConstruct接口
-	if postConstruct, ok := instance.(annotations.PostConstruct); ok {
+	if postConstruct, ok := instance.(annotations.PostConstruct); ok && initError == nil {
 		if err := postConstruct.PostConstruct(); err != nil {
-			return fmt.Errorf("failed to execute post construct for bean '%s': %v", beanName, err)
+			initError = fmt.Errorf("failed to execute post construct for bean '%s': %v", beanName, err)
 		}
 	}
 
 	// 4. 调用自定义初始化方法（通过反射）
-	if err := lm.callInitMethod(instance); err != nil {
-		return fmt.Errorf("failed to call init method for bean '%s': %v", beanName, err)
+	if initError == nil {
+		if err := lm.callInitMethod(instance); err != nil {
+			initError = fmt.Errorf("failed to call init method for bean '%s': %v", beanName, err)
+		}
+	}
+
+	// 记录生命周期完成事件
+	lm.logger.LogEvent(&logging.LifecycleStarted{
+		Timestamp:     time.Now(),
+		ComponentID:   beanName,
+		ComponentType: componentType,
+		MethodName:    "Init",
+		Duration:      time.Since(start),
+		Error:         initError,
+	})
+
+	if initError != nil {
+		return initError
 	}
 
 	// 记录初始化顺序
@@ -54,29 +102,54 @@ func (lm *LifecycleManager) ProcessInitialization(beanName string, instance inte
 
 // ProcessDestruction 处理Bean销毁
 func (lm *LifecycleManager) ProcessDestruction(beanName string, instance interface{}) error {
+	start := time.Now()
+	componentType := reflect.TypeOf(instance).String()
+	
+	// 记录生命周期停止开始事件
+	lm.logger.LogEvent(&logging.LifecycleStopping{
+		Timestamp:     time.Now(),
+		ComponentID:   beanName,
+		ComponentType: componentType,
+		MethodName:    "Destroy",
+	})
+
+	var destroyError error
+
 	// 1. 检查是否实现了PreDestroy接口
 	if preDestroy, ok := instance.(annotations.PreDestroy); ok {
 		if err := preDestroy.PreDestroy(); err != nil {
-			return fmt.Errorf("failed to execute pre destroy for bean '%s': %v", beanName, err)
+			destroyError = fmt.Errorf("failed to execute pre destroy for bean '%s': %v", beanName, err)
 		}
 	}
 
 	// 2. 检查是否实现了Destroyer接口
-	if destroyer, ok := instance.(annotations.Destroyer); ok {
+	if destroyer, ok := instance.(annotations.Destroyer); ok && destroyError == nil {
 		if err := destroyer.Destroy(); err != nil {
-			return fmt.Errorf("failed to destroy bean '%s': %v", beanName, err)
+			destroyError = fmt.Errorf("failed to destroy bean '%s': %v", beanName, err)
 		}
 	}
 
 	// 3. 调用自定义销毁方法（通过反射）
-	if err := lm.callDestroyMethod(instance); err != nil {
-		return fmt.Errorf("failed to call destroy method for bean '%s': %v", beanName, err)
+	if destroyError == nil {
+		if err := lm.callDestroyMethod(instance); err != nil {
+			destroyError = fmt.Errorf("failed to call destroy method for bean '%s': %v", beanName, err)
+		}
 	}
+
+	// 记录生命周期停止完成事件
+	lm.logger.LogEvent(&logging.LifecycleStopped{
+		Timestamp:     time.Now(),
+		ComponentID:   beanName,
+		ComponentType: componentType,
+		MethodName:    "Destroy",
+		Duration:      time.Since(start),
+		Error:         destroyError,
+	})
 
 	// 记录销毁顺序（逆序）
 	lm.destroyOrder = append([]string{beanName}, lm.destroyOrder...)
 
-	return nil
+	return destroyError
 }
 
 // callInitMethod 通过反射调用初始化方法
@@ -84,8 +157,18 @@ func (lm *LifecycleManager) callInitMethod(instance interface{}) error {
 	val := reflect.ValueOf(instance)
 	typ := reflect.TypeOf(instance)
 
-	// 查找init方法
-	initMethods := []string{"Init", "Initialize", "PostConstruct", "AfterPropertiesSet"}
+	// 查找init方法，排除已经通过接口调用的方法
+	initMethods := []string{"Initialize", "AfterPropertiesSet"}
+	
+	// 如果没有实现 Initializer 接口，则包含 Init 方法
+	if _, ok := instance.(annotations.Initializer); !ok {
+		initMethods = append([]string{"Init"}, initMethods...)
+	}
+	
+	// 如果没有实现 PostConstruct 接口，则包含 PostConstruct 方法
+	if _, ok := instance.(annotations.PostConstruct); !ok {
+		initMethods = append(initMethods, "PostConstruct")
+	}
 	
 	for _, methodName := range initMethods {
 		method := val.MethodByName(methodName)

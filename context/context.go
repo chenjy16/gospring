@@ -3,10 +3,12 @@ package context
 import (
 	"fmt"
 	"reflect"
+	"time"
 	"gospring/container"
 	"gospring/scanner"
 	"gospring/lifecycle"
 	"gospring/annotations"
+	"gospring/logging"
 )
 
 // ApplicationContext 应用上下文
@@ -15,17 +17,24 @@ type ApplicationContext struct {
 	scanner           *scanner.ComponentScanner
 	lifecycleManager  *lifecycle.LifecycleManager
 	annotationUtils   *annotations.AnnotationUtils
+	logger            logging.Logger
 	started           bool
 }
 
 // NewApplicationContext 创建新的应用上下文
 func NewApplicationContext() *ApplicationContext {
-	c := container.NewContainer()
+	return NewApplicationContextWithLogger(logging.NewConsoleLogger())
+}
+
+// NewApplicationContextWithLogger 创建带有指定日志器的应用上下文
+func NewApplicationContextWithLogger(logger logging.Logger) *ApplicationContext {
+	c := container.NewContainerWithLogger(logger)
 	return &ApplicationContext{
 		container:        c,
 		scanner:          scanner.NewComponentScanner(c),
 		lifecycleManager: lifecycle.NewLifecycleManager(),
 		annotationUtils:  annotations.NewAnnotationUtils(),
+		logger:           logger,
 		started:          false,
 	}
 }
@@ -101,6 +110,13 @@ func (ctx *ApplicationContext) Start() error {
 		return fmt.Errorf("application context is already started")
 	}
 
+	start := time.Now()
+	
+	// 记录上下文启动开始事件
+	ctx.logger.LogEvent(&logging.ContextStarting{
+		Timestamp: time.Now(),
+	})
+
 	// 1. 执行依赖注入
 	if err := ctx.container.WireAll(); err != nil {
 		return fmt.Errorf("failed to wire dependencies: %v", err)
@@ -118,6 +134,14 @@ func (ctx *ApplicationContext) Start() error {
 	}
 
 	ctx.started = true
+	
+	// 记录上下文启动完成事件
+	ctx.logger.LogEvent(&logging.ContextStarted{
+		Timestamp:      time.Now(),
+		Duration:       time.Since(start),
+		ComponentCount: len(beanNames),
+	})
+	
 	return nil
 }
 
@@ -126,6 +150,13 @@ func (ctx *ApplicationContext) Stop() error {
 	if !ctx.started {
 		return fmt.Errorf("application context is not started")
 	}
+
+	start := time.Now()
+	
+	// 记录上下文停止开始事件
+	ctx.logger.LogEvent(&logging.ContextStopping{
+		Timestamp: time.Now(),
+	})
 
 	// 按逆序销毁Bean
 	beanNames := ctx.container.ListBeans()
@@ -143,6 +174,12 @@ func (ctx *ApplicationContext) Stop() error {
 	// 销毁容器
 	ctx.container.Destroy()
 	ctx.started = false
+
+	// 记录上下文停止完成事件
+	ctx.logger.LogEvent(&logging.ContextStopped{
+		Timestamp: time.Now(),
+		Duration:  time.Since(start),
+	})
 
 	return nil
 }
@@ -196,6 +233,17 @@ func (ctx *ApplicationContext) AutoWire(instance interface{}) error {
 func (ctx *ApplicationContext) CreateBean(name string, factory func() interface{}) error {
 	instance := factory()
 	return ctx.RegisterBean(name, instance)
+}
+
+// SetLogger 设置应用上下文的日志器
+func (ctx *ApplicationContext) SetLogger(logger logging.Logger) {
+	ctx.logger = logger
+	ctx.container.SetLogger(logger)
+}
+
+// GetLogger 获取应用上下文的日志器
+func (ctx *ApplicationContext) GetLogger() logging.Logger {
+	return ctx.logger
 }
 
 // GetBeansOfType 获取指定类型的所有Bean

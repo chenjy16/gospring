@@ -64,8 +64,16 @@ func NewAnnotationUtils() *AnnotationUtils {
 
 // HasTag 检查结构体是否有指定标签
 func (au *AnnotationUtils) HasTag(typ reflect.Type, tagName string) bool {
+	if typ == nil {
+		return false
+	}
+	
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
+	}
+	
+	if typ.Kind() != reflect.Struct {
+		return false
 	}
 
 	for i := 0; i < typ.NumField(); i++ {
@@ -117,8 +125,16 @@ func (au *AnnotationUtils) IsComponent(typ reflect.Type) bool {
 
 // GetComponentName 获取组件名称
 func (au *AnnotationUtils) GetComponentName(typ reflect.Type) string {
+	if typ == nil {
+		return ""
+	}
+	
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
+	}
+	
+	if typ.Kind() != reflect.Struct {
+		return ""
 	}
 
 	// 检查各种组件标签
@@ -145,8 +161,16 @@ func (au *AnnotationUtils) GetInjectFields(typ reflect.Type) []reflect.StructFie
 
 // IsSingleton 检查是否为单例
 func (au *AnnotationUtils) IsSingleton(typ reflect.Type) bool {
+	if typ == nil {
+		return true // 默认为单例
+	}
+	
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
+	}
+	
+	if typ.Kind() != reflect.Struct {
+		return true // 默认为单例
 	}
 
 	for i := 0; i < typ.NumField(); i++ {

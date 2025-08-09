@@ -4,20 +4,29 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 	"gospring/container"
+	"gospring/logging"
 )
 
 // ComponentScanner 组件扫描器
 type ComponentScanner struct {
 	container *container.Container
 	packages  []string
+	logger    logging.Logger
 }
 
 // NewComponentScanner 创建新的组件扫描器
 func NewComponentScanner(c *container.Container) *ComponentScanner {
+	return NewComponentScannerWithLogger(c, logging.NewConsoleLogger())
+}
+
+// NewComponentScannerWithLogger 创建带有指定日志器的组件扫描器
+func NewComponentScannerWithLogger(c *container.Container, logger logging.Logger) *ComponentScanner {
 	return &ComponentScanner{
 		container: c,
 		packages:  make([]string, 0),
+		logger:    logger,
 	}
 }
 
@@ -26,8 +35,19 @@ func (s *ComponentScanner) AddPackage(pkg string) {
 	s.packages = append(s.packages, pkg)
 }
 
+// SetLogger 设置日志器
+func (s *ComponentScanner) SetLogger(logger logging.Logger) {
+	s.logger = logger
+}
+
+// GetLogger 获取日志器
+func (s *ComponentScanner) GetLogger() logging.Logger {
+	return s.logger
+}
+
 // ScanComponent 扫描并注册组件
 func (s *ComponentScanner) ScanComponent(instance interface{}) error {
+	start := time.Now()
 	typ := reflect.TypeOf(instance)
 	val := reflect.ValueOf(instance)
 
@@ -37,21 +57,59 @@ func (s *ComponentScanner) ScanComponent(instance interface{}) error {
 		val = val.Elem()
 	}
 
+	componentType := typ.String()
+
+	// 记录扫描开始事件
+	s.logger.LogEvent(&logging.ScanStarting{
+		Timestamp:     time.Now(),
+		ComponentType: componentType,
+		PackagePath:   typ.PkgPath(),
+	})
+
 	// 检查是否有component标签
 	componentName := s.getComponentName(typ)
 	if componentName == "" {
+		// 记录扫描失败事件
+		s.logger.LogEvent(&logging.ScanCompleted{
+			Timestamp:     time.Now(),
+			ComponentType: componentType,
+			PackagePath:   typ.PkgPath(),
+			ComponentName: "",
+			Duration:      time.Since(start),
+			Success:       false,
+			Error:         fmt.Errorf("type %v is not a component", typ),
+		})
 		return fmt.Errorf("type %v is not a component", typ)
 	}
 
 	// 检查是否为单例
 	singleton := s.isSingleton(typ)
+	scope := "prototype"
+	if singleton {
+		scope = "singleton"
+	}
 
+	var regError error
 	// 注册到容器
 	if singleton {
-		return s.container.RegisterSingleton(componentName, instance)
+		regError = s.container.RegisterSingleton(componentName, instance)
 	} else {
-		return s.container.RegisterPrototype(componentName, instance)
+		regError = s.container.RegisterPrototype(componentName, instance)
 	}
+
+	// 记录扫描完成事件
+	s.logger.LogEvent(&logging.ScanCompleted{
+		Timestamp:     time.Now(),
+		ComponentType: componentType,
+		PackagePath:   typ.PkgPath(),
+		ComponentName: componentName,
+		Scope:         scope,
+		Duration:      time.Since(start),
+		Success:       regError == nil,
+		Error:         regError,
+	})
+
+	return regError
 }
 
 // getComponentName 获取组件名称

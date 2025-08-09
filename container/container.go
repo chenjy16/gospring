@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
+	"gospring/logging"
 )
 
 // BeanDefinition 定义Bean的元数据
@@ -21,14 +23,28 @@ type Container struct {
 	beans       map[string]*BeanDefinition
 	typeMapping map[reflect.Type]string // 类型到Bean名称的映射
 	mutex       sync.RWMutex
+	logger      logging.Logger // 日志器
 }
 
 // NewContainer 创建新的容器实例
 func NewContainer() *Container {
-	return &Container{
+	return NewContainerWithLogger(logging.NewConsoleLogger())
+}
+
+// NewContainerWithLogger 创建带有指定日志器的容器实例
+func NewContainerWithLogger(logger logging.Logger) *Container {
+	container := &Container{
 		beans:       make(map[string]*BeanDefinition),
 		typeMapping: make(map[reflect.Type]string),
+		logger:      logger,
 	}
+	
+	// 记录容器创建事件
+	container.logger.LogEvent(&logging.ContainerCreated{
+		Timestamp: time.Now(),
+	})
+	
+	return container
 }
 
 // RegisterSingleton 注册单例Bean
@@ -74,6 +90,18 @@ func (c *Container) registerBean(name string, instance interface{}, singleton bo
 
 	// 如果实现了接口，也注册接口映射
 	c.registerInterfaces(instance, name)
+
+	// 记录组件注册事件
+	scope := "singleton"
+	if !singleton {
+		scope = "prototype"
+	}
+	c.logger.LogEvent(&logging.ComponentRegistered{
+		Timestamp:     time.Now(),
+		ComponentID:   name,
+		ComponentType: typ.String(),
+		Scope:         scope,
+	})
 
 	return nil
 }
@@ -125,12 +153,22 @@ func (c *Container) GetBeanByType(typ reflect.Type) interface{} {
 
 // createNewInstance 创建新的实例（用于原型模式）
 func (c *Container) createNewInstance(beanDef *BeanDefinition) interface{} {
+	start := time.Now()
+	
 	// 创建新实例
 	newVal := reflect.New(beanDef.Type)
 	newInstance := newVal.Interface()
 
 	// 执行依赖注入
 	c.InjectDependencies(newInstance)
+
+	// 记录组件创建事件
+	c.logger.LogEvent(&logging.ComponentCreated{
+		Timestamp:     time.Now(),
+		ComponentID:   beanDef.Name,
+		ComponentType: beanDef.Type.String(),
+		CreationTime:  time.Since(start),
+	})
 
 	return newInstance
 }
@@ -174,7 +212,26 @@ func (c *Container) InjectDependencies(instance interface{}) error {
 			depVal := reflect.ValueOf(dependency)
 			if depVal.Type().AssignableTo(field.Type()) {
 				field.Set(depVal)
+				
+				// 记录依赖注入成功事件
+				c.logger.LogEvent(&logging.DependencyInjected{
+					Timestamp:      time.Now(),
+					TargetType:     typ.String(),
+					DependencyType: depVal.Type().String(),
+					FieldName:      fieldType.Name,
+					ByType:         injectTag == "" || injectTag == "true",
+					ByName:         injectTag != "" && injectTag != "true",
+				})
 			}
+		} else {
+			// 记录依赖注入失败事件
+			c.logger.LogEvent(&logging.DependencyInjectionFailed{
+				Timestamp:      time.Now(),
+				TargetType:     typ.String(),
+				DependencyType: fieldType.Type.String(),
+				FieldName:      fieldType.Name,
+				Error:          fmt.Errorf("dependency not found"),
+			})
 		}
 	}
 
@@ -247,6 +304,20 @@ func (c *Container) RegisterByInterface(interfaceType reflect.Type, implementati
 	return nil
 }
 
+// SetLogger 设置容器的日志器
+func (c *Container) SetLogger(logger logging.Logger) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.logger = logger
+}
+
+// GetLogger 获取容器的日志器
+func (c *Container) GetLogger() logging.Logger {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.logger
+}
+
 // Destroy 销毁容器，清理资源
 func (c *Container) Destroy() {
 	c.mutex.Lock()
@@ -257,6 +328,13 @@ func (c *Container) Destroy() {
 		if destroyer, ok := beanDef.Instance.(interface{ Destroy() }); ok {
 			destroyer.Destroy()
 		}
+		
+		// 记录组件销毁事件
+		c.logger.LogEvent(&logging.ComponentDestroyed{
+			Timestamp:     time.Now(),
+			ComponentID:   beanDef.Name,
+			ComponentType: beanDef.Type.String(),
+		})
 	}
 
 	// 清理映射
