@@ -1,4 +1,151 @@
-# GoSpring - Go语言IoC/DI容器框架
+# GoSpring - Go IoC/DI Container Framework
+
+[English](#english) | [中文](#chinese)
+
+## English
+
+A lightweight dependency injection framework for Go, inspired by Spring's IoC/DI container implementation, using Go's reflection, interfaces, and struct tags.
+
+### ✨ Features
+
+- 🚀 **Automatic Dependency Injection** - Zero-configuration dependency injection based on reflection
+- 🏷️ **Tag-Driven** - Configuration using Go struct tags
+- 🔄 **Lifecycle Management** - Complete Bean initialization and destruction lifecycle
+- 📦 **Component Scanning** - Automatic component discovery and registration
+- 🎯 **Interface Binding** - Automatic binding between interfaces and implementations
+- 🛠️ **Multiple Scopes** - Support for singleton and prototype patterns
+- 🧵 **Thread-Safe** - Concurrent-safe container implementation
+- 🔧 **Type-Safe** - Safety guarantees based on Go's strong type system
+
+### 📁 Project Structure
+
+```
+gospring/
+├── container/          # Core container implementation
+├── context/           # Application context
+├── scanner/           # Component scanner
+├── lifecycle/         # Lifecycle management
+├── annotations/       # Annotation and tag processing
+├── examples/          # Example code
+│   ├── basic/        # Basic usage examples
+│   └── web/          # Web application examples
+├── tests/            # Unit tests
+├── docs/             # Documentation
+└── README.md
+```
+
+### Quick Start
+
+```go
+package main
+
+import (
+    "fmt"
+    "gospring/container"
+)
+
+// Define service interface
+type UserService interface {
+    GetUser(id int) string
+}
+
+// Implement service
+type UserServiceImpl struct {
+    Repository UserRepository `inject:""`
+}
+
+func (u *UserServiceImpl) GetUser(id int) string {
+    return u.Repository.FindById(id)
+}
+
+// Define repository interface
+type UserRepository interface {
+    FindById(id int) string
+}
+
+// Implement repository
+type UserRepositoryImpl struct{}
+
+func (u *UserRepositoryImpl) FindById(id int) string {
+    return fmt.Sprintf("User-%d", id)
+}
+
+func main() {
+    // Create container
+    c := container.NewContainer()
+    
+    // Register components
+    c.RegisterSingleton("userRepository", &UserRepositoryImpl{})
+    c.RegisterSingleton("userService", &UserServiceImpl{})
+    
+    // Get service
+    userService := c.GetBean("userService").(UserService)
+    result := userService.GetUser(1)
+    fmt.Println(result) // Output: User-1
+}
+```
+
+### Core Concepts
+
+#### 1. Container
+Manages the lifecycle and dependencies of all components.
+
+#### 2. Dependency Injection
+Automatically injects dependencies through `inject` tags.
+
+#### 3. Component Scanning
+Automatically discovers and registers components with specific tags.
+
+#### 4. Lifecycle Management
+Supports component initialization and destruction callbacks.
+
+### 🏷️ Tag Reference
+
+| Tag | Description | Example |
+|-----|-------------|---------|
+| `inject:""` | Mark field for injection | `Repository UserRepo \`inject:""\`` |
+| `inject:"beanName"` | Specify Bean name for injection | `Cache CacheService \`inject:"redisCache"\`` |
+| `component:""` | Mark as component | `_ string \`component:"userService"\`` |
+| `singleton:"true"` | Mark as singleton | `_ string \`singleton:"true"\`` |
+| `scope:"prototype"` | Set scope | `_ string \`scope:"prototype"\`` |
+| `init-method:"methodName"` | Specify initialization method | `_ string \`init-method:"Connect"\`` |
+| `destroy-method:"methodName"` | Specify destruction method | `_ string \`destroy-method:"Close"\`` |
+
+### 🚀 Running Examples
+
+#### Basic Example
+```bash
+go run examples/basic/main.go
+```
+
+#### Web Application Example
+```bash
+go run examples/web/main.go
+```
+Then visit http://localhost:8080
+
+#### Run Tests
+```bash
+go test ./tests/ -v
+```
+
+### 📚 Documentation
+
+- [Architecture Design](docs/architecture.md) - Detailed architecture design and implementation principles
+- [Usage Guide](docs/usage.md) - Complete usage guide and best practices
+- [Performance Report](docs/performance.md) - Performance test results and optimization recommendations
+
+### 🤝 Contributing
+
+Issues and Pull Requests are welcome!
+
+### 📄 License
+
+MIT License
+
+---
+
+## Chinese
 
 基于Spring的IoC/DI容器实现思路，使用Go语言的反射、接口和标签实现的轻量级依赖注入框架。
 
